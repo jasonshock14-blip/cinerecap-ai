@@ -1,0 +1,5 @@
+{
+  "name": "CineRecap AI",
+  "description": "A premium movie recap generator that transforms basic film details into engaging, professional-grade summaries using Gemini AI.",
+  "requestFramePermissions": []
+}

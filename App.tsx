@@ -6,45 +6,42 @@ import { generateMovieRecap } from './services/geminiService';
 /** 
  * MANAGEMENT SECTION:
  * To authorize a user for specific devices:
- * 1. Ask the user for their "Device ID" (shown on the login screen).
- * 2. Add the username, password, and an ARRAY of deviceIds here.
- * You can add as many IDs as you like for a single user.
+ * 1. Log in with the username and password.
+ * 2. If the device is not authorized, it will show you a "Device ID".
+ * 3. Copy that ID and add it to the 'deviceIds' array for that user below.
  */
 const AUTHORIZED_USERS: Record<string, { pass: string; deviceIds: string[] }> = {
   'admin': { 
     pass: '0000', 
-    deviceIds: ['TW96aWxsYS81LjAg', 'REVCVUctREVWSUNFLTI='] // Add multiple IDs in this array
+    deviceIds: [] // EMPTY: This forces you to copy your phone's ID first!
   },
-  'demo-user': {
-    pass: 'moviepass123',
-    deviceIds: [] // Leave empty to force them to send you their ID first
+  'editor': {
+    pass: 'recap2025',
+    deviceIds: [] 
   }
 };
 
 const TONES = ['Dramatic', 'Humorous', 'Analytical', 'Fast-paced', 'Suspenseful', 'Witty'];
-const LENGTHS = [
-  { id: 'short', label: 'Quick (2 min read)' },
-  { id: 'medium', label: 'Balanced (5 min read)' },
-  { id: 'detailed', label: 'Deep Dive (10 min read)' }
-];
 
-// Helper to generate a hardware-based fingerprint
+// Improved fingerprinting to be more unique to specific hardware
 const getDeviceFingerprint = (): string => {
   const nav = window.navigator;
   const screen = window.screen;
   const idString = [
     nav.userAgent,
-    nav.language,
-    screen.colorDepth,
+    nav.platform,
+    nav.hardwareConcurrency || 'unknown',
     screen.width + 'x' + screen.height,
+    screen.availWidth + 'x' + screen.availHeight,
     new Date().getTimezoneOffset(),
-    !!(window as any).chrome
+    'v1' // Versioning the fingerprint logic
   ].join('|');
   
   try {
-    return btoa(idString).slice(0, 16);
+    // Generate a shorter, cleaner 12-character ID
+    return btoa(idString).replace(/[^a-zA-Z0-0]/g, '').slice(-12).toUpperCase();
   } catch (e) {
-    return 'UNKNOWN-DEVICE';
+    return 'ERR-DEVICE-ID';
   }
 };
 
@@ -70,7 +67,6 @@ const App: React.FC = () => {
     length: 'medium'
   });
 
-  // Check for device fingerprint and existing session
   useEffect(() => {
     const fingerprint = getDeviceFingerprint();
     setCurrentDeviceId(fingerprint);
@@ -78,7 +74,6 @@ const App: React.FC = () => {
     const savedUser = localStorage.getItem('cinerecap_user');
     if (savedUser) {
       const parsedUser: User = JSON.parse(savedUser);
-      // Validate session matches current device
       if (parsedUser.deviceId === fingerprint) {
         setUser(parsedUser);
       } else {
@@ -99,9 +94,9 @@ const App: React.FC = () => {
       return;
     }
 
-    // Check device lock - now checks if current ID is in the AUTHORIZED ARRAY
+    // Strict check: current device must be in the array
     if (!config.deviceIds.includes(currentDeviceId)) {
-      setAuthError(`Unauthorized Device. Please provide this ID to the admin to add it to your account: ${currentDeviceId}`);
+      setAuthError(`ACCESS DENIED: This device (${currentDeviceId}) is not registered for user "${username}".`);
       return;
     }
 
@@ -120,7 +115,7 @@ const App: React.FC = () => {
 
   const copyDeviceId = () => {
     navigator.clipboard.writeText(currentDeviceId);
-    alert('Device ID copied! Send this to your administrator.');
+    alert('ID copied! Paste this into your authorized_users list.');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -157,22 +152,20 @@ const App: React.FC = () => {
               C
             </div>
             <h1 className="text-3xl font-display font-bold text-white mb-2">CineRecap AI</h1>
-            <p className="text-slate-400">Multi-Device Access Control</p>
+            <p className="text-slate-400 text-sm">Secure Movie Analysis Studio</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
             {authError && (
               <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-xs font-medium leading-relaxed">
                 {authError}
-                {authError.includes('Unauthorized Device') && (
-                   <button 
-                    type="button"
-                    onClick={copyDeviceId}
-                    className="block mt-2 text-amber-500 font-bold underline hover:text-amber-400"
-                   >
-                     Copy Device ID
-                   </button>
-                )}
+                <button 
+                  type="button"
+                  onClick={copyDeviceId}
+                  className="block mt-2 text-amber-500 font-bold underline hover:text-amber-400"
+                >
+                  Click here to Copy ID
+                </button>
               </div>
             )}
             <div>
@@ -201,13 +194,13 @@ const App: React.FC = () => {
               type="submit"
               className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-bold py-4 rounded-xl transition-all shadow-lg shadow-amber-900/20 active:scale-[0.98]"
             >
-              Verify Access
+              Verify Identity
             </button>
           </form>
 
           <div className="mt-8 pt-8 border-t border-slate-800 flex flex-col items-center gap-2">
-            <span className="text-[10px] text-slate-600 uppercase tracking-widest">Current Device Identity</span>
-            <code className="text-[10px] px-3 py-1 bg-slate-900 rounded-full text-slate-400 border border-slate-800 font-mono">
+            <span className="text-[10px] text-slate-600 uppercase tracking-widest">Device Hardware Token</span>
+            <code className="text-[10px] px-3 py-1 bg-slate-900 rounded-full text-amber-500 border border-slate-800 font-mono font-bold">
               {currentDeviceId}
             </code>
           </div>
@@ -240,28 +233,28 @@ const App: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className={`lg:col-span-5 space-y-6 ${status === AppStatus.COMPLETED ? 'hidden lg:block opacity-50 pointer-events-none' : ''}`}>
             <div className="glass-panel rounded-2xl p-6 md:p-8">
-              <h2 className="text-2xl font-display font-bold mb-6 text-white">Movie Studio</h2>
+              <h2 className="text-2xl font-display font-bold mb-6 text-white">Input Details</h2>
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Movie Title</label>
-                  <input type="text" required placeholder="e.g. Inception" className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                  <input type="text" required placeholder="e.g. Inception" className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all text-white" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <input type="text" placeholder="Genre" className="bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none" value={formData.genre} onChange={e => setFormData({...formData, genre: e.target.value})} />
-                  <input type="text" placeholder="Director" className="bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none" value={formData.director} onChange={e => setFormData({...formData, director: e.target.value})} />
+                  <input type="text" placeholder="Genre" className="bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none text-white" value={formData.genre} onChange={e => setFormData({...formData, genre: e.target.value})} />
+                  <input type="text" placeholder="Director" className="bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none text-white" value={formData.director} onChange={e => setFormData({...formData, director: e.target.value})} />
                 </div>
-                <textarea rows={4} placeholder="Plot points..." className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 resize-none focus:outline-none" value={formData.keyPlotPoints} onChange={e => setFormData({...formData, keyPlotPoints: e.target.value})} />
+                <textarea rows={4} placeholder="Plot points, twists, or key scenes..." className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 resize-none focus:outline-none text-white" value={formData.keyPlotPoints} onChange={e => setFormData({...formData, keyPlotPoints: e.target.value})} />
                 <div className="flex items-center gap-4">
-                    <select className="flex-1 bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none appearance-none" value={formData.tone} onChange={e => setFormData({...formData, tone: e.target.value})}>
-                        {TONES.map(t => <option key={t} value={t}>{t}</option>)}
+                    <select className="flex-1 bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none appearance-none text-white" value={formData.tone} onChange={e => setFormData({...formData, tone: e.target.value})}>
+                        {TONES.map(t => <option key={t} value={t} className="bg-slate-900">{t}</option>)}
                     </select>
                     <label className="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" checked={formData.includeSpoilers} onChange={e => setFormData({...formData, includeSpoilers: e.target.checked})} className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-amber-500" />
                         <span className="text-xs font-semibold">Spoilers</span>
                     </label>
                 </div>
-                <button type="submit" disabled={status === AppStatus.GENERATING} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 font-bold py-4 rounded-xl shadow-lg shadow-amber-900/20 active:scale-95 disabled:opacity-50">
-                    {status === AppStatus.GENERATING ? 'Processing Film...' : 'Generate Recap'}
+                <button type="submit" disabled={status === AppStatus.GENERATING} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 font-bold py-4 rounded-xl shadow-lg shadow-amber-900/20 active:scale-95 disabled:opacity-50 transition-all">
+                    {status === AppStatus.GENERATING ? 'Generating Professional Recap...' : 'Create Recap'}
                 </button>
               </form>
             </div>
@@ -270,30 +263,55 @@ const App: React.FC = () => {
           <div className="lg:col-span-7">
             {status === AppStatus.IDLE && (
               <div className="h-full flex flex-col items-center justify-center p-12 glass-panel rounded-2xl border-dashed border-slate-700">
-                <p className="text-slate-500 text-center">Ready for your next review.<br/><span className="text-[10px] mt-2 block opacity-50">Active Session: {user.username}</span></p>
+                <div className="w-16 h-16 bg-slate-800/50 rounded-full flex items-center justify-center mb-4 text-slate-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                </div>
+                <p className="text-slate-500 text-center font-medium">No active recap.<br/><span className="text-[10px] mt-2 block opacity-50 uppercase tracking-widest font-mono">Secure ID: {user.deviceId}</span></p>
               </div>
             )}
             
+            {status === AppStatus.GENERATING && (
+              <div className="h-full flex flex-col items-center justify-center p-12 glass-panel rounded-2xl">
+                <div className="relative w-20 h-20 mb-6">
+                  <div className="absolute inset-0 border-4 border-amber-500/20 rounded-full"></div>
+                  <div className="absolute inset-0 border-4 border-amber-500 rounded-full border-t-transparent animate-spin"></div>
+                </div>
+                <h3 className="text-xl font-display font-bold text-white mb-2">Analyzing the Story</h3>
+                <p className="text-slate-400 text-center text-sm">Gemini AI is crafting a high-quality summary...</p>
+              </div>
+            )}
+
             {status === AppStatus.COMPLETED && recap && (
                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                  <div className="space-y-4">
-                    <h1 className="text-4xl font-display font-bold text-white underline decoration-amber-500/50">{formData.title}</h1>
+                    <div className="flex items-center gap-3">
+                      <span className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] font-bold text-amber-500 uppercase tracking-widest">Analysis Ready</span>
+                    </div>
+                    <h1 className="text-4xl font-display font-bold text-white leading-tight">{formData.title}</h1>
                     <p className="text-2xl font-display italic text-slate-400 border-l-4 border-amber-500 pl-6 leading-relaxed">"{recap.tagline}"</p>
                  </div>
-                 <div className="bg-slate-900/50 p-8 rounded-2xl border border-slate-800 text-slate-300 leading-relaxed text-lg whitespace-pre-wrap">
+                 <div className="bg-slate-900/40 p-8 rounded-2xl border border-slate-800/50 text-slate-300 leading-relaxed text-lg whitespace-pre-wrap shadow-inner">
                     {recap.summary}
                  </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="glass-panel p-6 rounded-2xl">
-                        <h4 className="font-bold text-amber-500 text-xs uppercase tracking-widest mb-4">Character Spotlight</h4>
-                        <p className="text-sm text-slate-400">{recap.characterAnalysis}</p>
+                        <h4 className="font-bold text-amber-500 text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                          Character Spotlight
+                        </h4>
+                        <p className="text-sm text-slate-400 leading-relaxed">{recap.characterAnalysis}</p>
                     </div>
                     <div className="glass-panel p-6 rounded-2xl">
-                        <h4 className="font-bold text-amber-500 text-xs uppercase tracking-widest mb-4">Critical Verdict</h4>
-                        <p className="text-sm text-white italic">{recap.verdict}</p>
+                        <h4 className="font-bold text-orange-500 text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                          Critical Verdict
+                        </h4>
+                        <p className="text-sm text-white italic leading-relaxed">{recap.verdict}</p>
                     </div>
                  </div>
-                 <button onClick={resetForm} className="w-full py-4 border border-slate-800 rounded-xl hover:bg-slate-900 transition-colors text-sm font-bold uppercase tracking-widest">New Session</button>
+                 <button onClick={resetForm} className="w-full py-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition-all text-sm font-bold uppercase tracking-widest text-slate-400">Finish Session & Start New</button>
                </div>
             )}
           </div>
